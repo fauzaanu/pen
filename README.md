@@ -15,12 +15,6 @@ Powered by Google's Gemini API. Also supports image generation.
 
 ## Installation
 
-1. Open Obsidian Settings → Community Plugins
-2. Search for "Pen"
-3. Click Install, then Enable
-
-### Manual installation
-
 1. Download the latest release from [GitHub Releases](https://github.com/fauzaanu/pen/releases)
 2. Extract `main.js`, `manifest.json`, and `styles.css` into your vault's `.obsidian/plugins/pen/` folder
 3. Reload Obsidian and enable the plugin in Settings → Community Plugins
