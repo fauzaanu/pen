@@ -1,9 +1,9 @@
 {
-	"id": "workflow",
-	"name": "Workflow",
-	"version": "1.0.6",
-	"minAppVersion": "0.15.0",
-	"description": "create and run connected LLM workflows. Each workflow consists of multiple tasks that run sequentially with different LLM Identities.",
+	"id": "pen",
+	"name": "Pen",
+	"version": "2.0.0",
+	"minAppVersion": "1.5.0",
+	"description": "Research any topic without leaving Obsidian. Navigate to a note, run the command, and get content.",
 	"author": "Fauzaan Gasim",
 	"authorUrl": "https://github.com/fauzaanu",
 	"isDesktopOnly": false

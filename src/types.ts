@@ -1,38 +1,18 @@
-import {IconName} from "obsidian";
-
-export type ProviderName = 'openai' | 'perplexity';
-export type Temperature = 'Creative' | 'Medium' | 'Precise';
-
-
-export interface ProviderModel {
-	name: ProviderName;
-	model: string;
-	apiKey: string;
-}
-
-export interface ApiKey {
-	name: ProviderName;
-	apiKey: string;
-}
-
-export interface WorkflowTask {
+export interface FrontmatterField {
 	name: string;
-	provider: ProviderModel;
-	temperature: Temperature;
-	maxTokens: number;
-	prompt: string;
+	type: "text" | "list";
 }
 
-export interface Workflow {
-	workflowName: string;
-	workflowIcon: IconName;
-	tasks: WorkflowTask[];
+export interface Profile {
+	name: string;
+	systemPrompt: string;
+	imagePrompt: string;
+	userRules: string;
+	frontmatterFields: FrontmatterField[];
 }
 
-export interface WorkflowSettings {
-	workflows: Workflow[];
-	providers: ProviderModel[];
-	apiKeys: ApiKey[];
+export interface ResearchSettings {
+	apiKey: string;
+	profiles: Profile[];
+	activeProfileName: string;
 }
-
-

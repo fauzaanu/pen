@@ -1,6 +1,16 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { copyFileSync, mkdirSync, existsSync } from "fs";
+
+mkdirSync("build", { recursive: true });
+copyFileSync("manifest.json", "build/manifest.json");
+copyFileSync("styles.css", "build/styles.css");
+
+// Preserve data.json (plugin settings/keys) if it already exists in build/
+if (!existsSync("build/data.json") && existsSync("data.json")) {
+	copyFileSync("data.json", "build/data.json");
+}
 
 const banner =
 `/*
@@ -37,7 +47,7 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
-	outfile: "main.js",
+	outfile: "build/main.js",
 });
 
 if (prod) {
