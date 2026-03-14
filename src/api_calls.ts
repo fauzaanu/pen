@@ -1,7 +1,8 @@
 import {requestUrl, RequestUrlParam} from "obsidian";
 import {FrontmatterField} from "./types";
 
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview";
+export const DEFAULT_MODEL_NAME = "gemini-3-flash-preview";
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 export const DEFAULT_SYSTEM_PROMPT = `You are a research assistant inside a note-taking app. The user gives you a topic (the note title) and optionally existing notes. Your job is to research and expand on the topic with well-structured markdown content.
 
@@ -82,6 +83,7 @@ export async function research(
 	frontmatterFields: FrontmatterField[],
 	userRules: string,
 	systemPrompt: string,
+	modelName?: string,
 ): Promise<ResearchResult> {
 	if (!apiKey || apiKey.trim() === "") {
 		throw new Error("Gemini API key is not set. Go to plugin settings to add it.");
@@ -109,7 +111,7 @@ export async function research(
 		body.tools = [{google_search: {}}];
 	}
 
-	const url = `${GEMINI_BASE}:generateContent?key=${apiKey}`;
+	const url = `${GEMINI_API_BASE}/${modelName || DEFAULT_MODEL_NAME}:generateContent?key=${apiKey}`;
 	const options: RequestUrlParam = {
 		method: "POST",
 		url,
@@ -151,12 +153,12 @@ export async function research(
 	}
 }
 
-const NANO_BANANA_MODEL = "gemini-3.1-flash-image-preview";
-const NANO_BANANA_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${NANO_BANANA_MODEL}`;
+export const DEFAULT_IMAGE_MODEL_NAME = "gemini-3.1-flash-image-preview";
 
 export async function generateImage(
 	prompt: string,
 	apiKey: string,
+	imageModelName?: string,
 ): Promise<{base64: string; mimeType: string}> {
 	if (!apiKey || apiKey.trim() === "") {
 		throw new Error("Gemini API key is not set. Go to plugin settings to add it.");
@@ -166,7 +168,8 @@ export async function generateImage(
 		contents: [{parts: [{text: prompt}]}],
 	};
 
-	const url = `${NANO_BANANA_BASE}:generateContent`;
+	const model = imageModelName || DEFAULT_IMAGE_MODEL_NAME;
+	const url = `${GEMINI_API_BASE}/${model}:generateContent`;
 	const options: RequestUrlParam = {
 		method: "POST",
 		url,

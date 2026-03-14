@@ -13,6 +13,8 @@ export interface Profile {
 
 export interface ResearchSettings {
 	apiKey: string;
+	modelName: string;
+	imageModelName: string;
 	profiles: Profile[];
 	activeProfileName: string;
 }

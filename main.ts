@@ -8,6 +8,8 @@ export default class ResearchPlugin extends Plugin {
 	settings: ResearchSettings;
 	profileManager: ProfileManager;
 	statusBarEl: HTMLElement;
+	private activeResearchCount = 0;
+	private activeImageCount = 0;
 
 	async onload() {
 		await this.loadSettings();
@@ -17,6 +19,7 @@ export default class ResearchPlugin extends Plugin {
 		this.addCommand({
 			id: "research",
 			name: "Research",
+			hotkeys: [{modifiers: ["Alt"], key: "q"}],
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				this.runResearch(editor, view, false);
 			},
@@ -25,6 +28,7 @@ export default class ResearchPlugin extends Plugin {
 		this.addCommand({
 			id: "research-web",
 			name: "Research with web search",
+			hotkeys: [{modifiers: ["Alt"], key: "w"}],
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				this.runResearch(editor, view, true);
 			},
@@ -33,10 +37,26 @@ export default class ResearchPlugin extends Plugin {
 		this.addCommand({
 			id: "generate-image",
 			name: "Generate image from selected text",
+			hotkeys: [{modifiers: ["Alt"], key: "x"}],
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				this.runGenerateImage(editor, view);
 			},
 		});
+	}
+
+	private updateStatusBar(): void {
+		const parts: string[] = [];
+		if (this.activeResearchCount > 0) {
+			parts.push(this.activeResearchCount === 1
+				? "🔍 Researching..."
+				: `🔍 Researching ${this.activeResearchCount} notes...`);
+		}
+		if (this.activeImageCount > 0) {
+			parts.push(this.activeImageCount === 1
+				? "🎨 Generating image..."
+				: `🎨 Generating ${this.activeImageCount} images...`);
+		}
+		this.statusBarEl.setText(parts.join("  "));
 	}
 
 	async runResearch(editor: Editor, view: MarkdownView, useWebSearch: boolean) {
@@ -46,7 +66,8 @@ export default class ResearchPlugin extends Plugin {
 
 		if (!file) return;
 
-		this.statusBarEl.setText(useWebSearch ? "🔍 Researching with web..." : "🔍 Researching...");
+		this.activeResearchCount++;
+		this.updateStatusBar();
 
 		try {
 			const activeProfile = this.profileManager.getActiveProfile();
@@ -58,6 +79,7 @@ export default class ResearchPlugin extends Plugin {
 				activeProfile.frontmatterFields,
 				activeProfile.userRules,
 				activeProfile.systemPrompt,
+				this.settings.modelName,
 			);
 
 			const cleaned = removeEmptyLines(result.content);
@@ -73,16 +95,17 @@ export default class ResearchPlugin extends Plugin {
 
 			// Append content using Vault.process so it works after frontmatter changes
 			await this.app.vault.process(file, (data) => {
-				// Strip trailing whitespace/newlines, then just add two newlines before content
 				const trimmed = data.trimEnd();
 				return trimmed + "\n\n" + cleaned;
 			});
 
-			this.statusBarEl.setText("");
+			new Notice(`Research complete: ${noteTitle}`);
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Research failed";
-			this.statusBarEl.setText(msg);
-			setTimeout(() => this.statusBarEl.setText(""), 10000);
+			new Notice(`${noteTitle}: ${msg}`);
+		} finally {
+			this.activeResearchCount--;
+			this.updateStatusBar();
 		}
 	}
 
@@ -96,14 +119,15 @@ export default class ResearchPlugin extends Plugin {
 		const file = view.file;
 		if (!file) return;
 
-		this.statusBarEl.setText("🎨 Generating image...");
+		this.activeImageCount++;
+		this.updateStatusBar();
 
 		try {
 			const activeProfile = this.profileManager.getActiveProfile();
 			const finalPrompt = activeProfile.imagePrompt.includes("{{selection}}")
 				? activeProfile.imagePrompt.replace("{{selection}}", selection)
 				: activeProfile.imagePrompt + "\n\n" + selection;
-			const result = await generateImage(finalPrompt, this.settings.apiKey);
+			const result = await generateImage(finalPrompt, this.settings.apiKey, this.settings.imageModelName);
 
 			// Determine file extension from mime type
 			const ext = result.mimeType.includes("jpeg") ? "jpg" : "png";
@@ -122,13 +146,13 @@ export default class ResearchPlugin extends Plugin {
 			const cursor = editor.getCursor("to");
 			editor.replaceRange(`\n\n![[${fileName}]]`, cursor);
 
-			this.statusBarEl.setText("");
 			new Notice("Image generated successfully.");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Image generation failed";
-			this.statusBarEl.setText(msg);
 			new Notice(msg);
-			setTimeout(() => this.statusBarEl.setText(""), 10000);
+		} finally {
+			this.activeImageCount--;
+			this.updateStatusBar();
 		}
 	}
 

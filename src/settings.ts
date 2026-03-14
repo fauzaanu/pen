@@ -1,10 +1,12 @@
 import {App, Modal, Notice, PluginSettingTab, Setting} from "obsidian";
 import {FrontmatterField, Profile, ResearchSettings} from "./types";
 import ResearchPlugin from "../main";
-import {DEFAULT_SYSTEM_PROMPT, DEFAULT_IMAGE_PROMPT} from "./api_calls";
+import {DEFAULT_SYSTEM_PROMPT, DEFAULT_IMAGE_PROMPT, DEFAULT_MODEL_NAME, DEFAULT_IMAGE_MODEL_NAME} from "./api_calls";
 
 export const DEFAULT_SETTINGS: ResearchSettings = {
 	apiKey: "",
+	modelName: DEFAULT_MODEL_NAME,
+	imageModelName: DEFAULT_IMAGE_MODEL_NAME,
 	profiles: [
 		{
 			name: "Default",
@@ -33,12 +35,16 @@ export function migrateSettings(data: Record<string, unknown>): ResearchSettings
 		};
 		return {
 			apiKey: (data.apiKey as string) ?? "",
+			modelName: (data.modelName as string) ?? DEFAULT_MODEL_NAME,
+			imageModelName: (data.imageModelName as string) ?? DEFAULT_IMAGE_MODEL_NAME,
 			profiles: [migrated],
 			activeProfileName: "Default",
 		};
 	}
 	return {
 		apiKey: (data.apiKey as string) ?? "",
+		modelName: (data.modelName as string) ?? DEFAULT_MODEL_NAME,
+		imageModelName: (data.imageModelName as string) ?? DEFAULT_IMAGE_MODEL_NAME,
 		profiles: data.profiles as Profile[],
 		activeProfileName: (data.activeProfileName as string) ?? (data.profiles as Profile[])[0]?.name ?? "Default",
 	};
@@ -181,6 +187,7 @@ class TextInputModal extends Modal {
 
 export class ResearchSettingTab extends PluginSettingTab {
 	plugin: ResearchPlugin;
+	private activeTab: "config" | "profiles" | "content" | "image" = "config";
 
 	constructor(app: App, plugin: ResearchPlugin) {
 		super(app, plugin);
@@ -191,9 +198,120 @@ export class ResearchSettingTab extends PluginSettingTab {
 		const {containerEl} = this;
 		containerEl.empty();
 
+		// ── Tab bar ──────────────────────────────────────────────
+		const tabBar = containerEl.createDiv({cls: "research-settings-tabs"});
+		tabBar.style.display = "flex";
+		tabBar.style.gap = "0";
+		tabBar.style.borderBottom = "1px solid var(--background-modifier-border)";
+		tabBar.style.marginBottom = "1em";
+
+		const tabs: {id: "config" | "profiles" | "content" | "image"; label: string}[] = [
+			{id: "config", label: "Config"},
+			{id: "profiles", label: "Profiles"},
+			{id: "content", label: "Content Generation"},
+			{id: "image", label: "Image Generation"},
+		];
+
+		for (const tab of tabs) {
+			const btn = tabBar.createEl("button", {text: tab.label});
+			btn.style.padding = "8px 16px";
+			btn.style.border = "none";
+			btn.style.background = "none";
+			btn.style.cursor = "pointer";
+			btn.style.borderBottom = tab.id === this.activeTab
+				? "2px solid var(--interactive-accent)"
+				: "2px solid transparent";
+			btn.style.color = tab.id === this.activeTab
+				? "var(--text-normal)"
+				: "var(--text-muted)";
+			btn.style.fontWeight = tab.id === this.activeTab ? "600" : "400";
+			btn.addEventListener("click", () => {
+				this.activeTab = tab.id;
+				this.display();
+			});
+		}
+
+		// ── Tab content ──────────────────────────────────────────
+		switch (this.activeTab) {
+			case "config":
+				this.displayConfigTab(containerEl);
+				break;
+			case "profiles":
+				this.displayProfilesTab(containerEl);
+				break;
+			case "content":
+				this.displayContentTab(containerEl);
+				break;
+			case "image":
+				this.displayImageTab(containerEl);
+				break;
+		}
+	}
+
+	/** Helper to make a Setting's textarea span full width below the label. */
+	private makeFullWidth(settingEl: Setting): void {
+		settingEl.settingEl.style.display = "block";
+	}
+
+	private displayConfigTab(containerEl: HTMLElement): void {
+		// ── API Key (masked) ─────────────────────────────────────
+		new Setting(containerEl).setName("API").setHeading();
+
+		const apiKeySetting = new Setting(containerEl)
+			.setName("Gemini API key")
+			.setDesc("Get your key from Google AI Studio. Used for both research and image generation.");
+
+		const apiKeyInput = apiKeySetting.controlEl.createEl("input", {type: "password"});
+		apiKeyInput.placeholder = "Enter your Gemini API key";
+		apiKeyInput.value = this.plugin.settings.apiKey;
+		apiKeyInput.style.width = "100%";
+		apiKeyInput.style.minWidth = "200px";
+		apiKeyInput.addEventListener("input", async () => {
+			this.plugin.settings.apiKey = apiKeyInput.value;
+			await this.plugin.saveSettings();
+		});
+
+		const toggleBtn = apiKeySetting.controlEl.createEl("button", {
+			cls: "clickable-icon",
+			attr: {"aria-label": "Toggle API key visibility"},
+		});
+		toggleBtn.style.marginLeft = "4px";
+		toggleBtn.textContent = "👁";
+		toggleBtn.addEventListener("click", () => {
+			const isPassword = apiKeyInput.type === "password";
+			apiKeyInput.type = isPassword ? "text" : "password";
+			toggleBtn.textContent = isPassword ? "🙈" : "👁";
+		});
+
+		// ── Models ───────────────────────────────────────────────
+		new Setting(containerEl).setName("Models").setHeading();
+
+		new Setting(containerEl)
+			.setName("Research model")
+			.setDesc("Gemini model name used for content generation.")
+			.addText(text => text
+				.setPlaceholder(DEFAULT_MODEL_NAME)
+				.setValue(this.plugin.settings.modelName)
+				.onChange(async (value) => {
+					this.plugin.settings.modelName = value.trim() || DEFAULT_MODEL_NAME;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Image model")
+			.setDesc("Gemini model name used for image generation.")
+			.addText(text => text
+				.setPlaceholder(DEFAULT_IMAGE_MODEL_NAME)
+				.setValue(this.plugin.settings.imageModelName)
+				.onChange(async (value) => {
+					this.plugin.settings.imageModelName = value.trim() || DEFAULT_IMAGE_MODEL_NAME;
+					await this.plugin.saveSettings();
+				}));
+	}
+
+	private displayProfilesTab(containerEl: HTMLElement): void {
 		const manager = this.plugin.profileManager;
 
-		// ── Profiles ─────────────────────────────────────────────
 		new Setting(containerEl).setName("Profiles").setHeading();
 
 		const profileSetting = new Setting(containerEl)
@@ -269,25 +387,15 @@ export class ResearchSettingTab extends PluginSettingTab {
 					new Notice(e instanceof Error ? e.message : "Failed to delete profile.");
 				}
 			}));
+	}
 
-		// ── General ──────────────────────────────────────────────
-		new Setting(containerEl).setName("General").setHeading();
+	private displayContentTab(containerEl: HTMLElement): void {
+		const manager = this.plugin.profileManager;
 
-		new Setting(containerEl)
-			.setName("Gemini API key")
-			.setDesc("Get your key from Google AI Studio. Used for both research and image generation.")
-			.addText(text => text
-				.setPlaceholder("Enter your Gemini API key")
-				.setValue(this.plugin.settings.apiKey)
-				.onChange(async (value) => {
-					this.plugin.settings.apiKey = value;
-					await this.plugin.saveSettings();
-				}));
-
-		// ── Research ─────────────────────────────────────────────
+		// ── Research prompts ─────────────────────────────────────
 		new Setting(containerEl).setName("Research").setHeading();
 
-		new Setting(containerEl)
+		const systemPromptSetting = new Setting(containerEl)
 			.setName("System prompt")
 			.setDesc("The base prompt sent to the research model.")
 			.addTextArea(text => {
@@ -300,6 +408,7 @@ export class ResearchSettingTab extends PluginSettingTab {
 				text.inputEl.rows = 10;
 				text.inputEl.style.width = "100%";
 			});
+		this.makeFullWidth(systemPromptSetting);
 
 		new Setting(containerEl)
 			.setName("Reset research prompt")
@@ -312,7 +421,7 @@ export class ResearchSettingTab extends PluginSettingTab {
 					this.display();
 				}));
 
-		new Setting(containerEl)
+		const rulesSetting = new Setting(containerEl)
 			.setName("Custom rules")
 			.setDesc("Additional instructions appended to the research prompt.")
 			.addTextArea(text => {
@@ -326,34 +435,7 @@ export class ResearchSettingTab extends PluginSettingTab {
 				text.inputEl.rows = 4;
 				text.inputEl.style.width = "100%";
 			});
-
-		// ── Image generation ─────────────────────────────────────
-		new Setting(containerEl).setName("Image generation").setHeading();
-
-		new Setting(containerEl)
-			.setName("Image prompt")
-			.setDesc("Prompt template for Nano Banana image generation. Use {{selection}} as a placeholder for the selected text.")
-			.addTextArea(text => {
-				text
-					.setValue(manager.getActiveProfile().imagePrompt)
-					.onChange(async (value) => {
-						manager.getActiveProfile().imagePrompt = value;
-						await manager.saveActiveProfile();
-					});
-				text.inputEl.rows = 6;
-				text.inputEl.style.width = "100%";
-			});
-
-		new Setting(containerEl)
-			.setName("Reset image prompt")
-			.setDesc("Restore the image prompt to its default.")
-			.addButton(button => button
-				.setButtonText("Reset to default")
-				.onClick(async () => {
-					manager.getActiveProfile().imagePrompt = DEFAULT_IMAGE_PROMPT;
-					await manager.saveActiveProfile();
-					this.display();
-				}));
+		this.makeFullWidth(rulesSetting);
 
 		// ── Frontmatter fields ──────────────────────────────────
 		new Setting(containerEl).setName("Frontmatter fields").setHeading();
@@ -401,5 +483,37 @@ export class ResearchSettingTab extends PluginSettingTab {
 						this.display();
 					}));
 		}
+	}
+
+	private displayImageTab(containerEl: HTMLElement): void {
+		const manager = this.plugin.profileManager;
+
+		new Setting(containerEl).setName("Image generation").setHeading();
+
+		const imagePromptSetting = new Setting(containerEl)
+			.setName("Image prompt")
+			.setDesc("Prompt template for image generation. Use {{selection}} as a placeholder for the selected text.")
+			.addTextArea(text => {
+				text
+					.setValue(manager.getActiveProfile().imagePrompt)
+					.onChange(async (value) => {
+						manager.getActiveProfile().imagePrompt = value;
+						await manager.saveActiveProfile();
+					});
+				text.inputEl.rows = 6;
+				text.inputEl.style.width = "100%";
+			});
+		this.makeFullWidth(imagePromptSetting);
+
+		new Setting(containerEl)
+			.setName("Reset image prompt")
+			.setDesc("Restore the image prompt to its default.")
+			.addButton(button => button
+				.setButtonText("Reset to default")
+				.onClick(async () => {
+					manager.getActiveProfile().imagePrompt = DEFAULT_IMAGE_PROMPT;
+					await manager.saveActiveProfile();
+					this.display();
+				}));
 	}
 }
